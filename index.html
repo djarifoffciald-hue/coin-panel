@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Coin Admin Panel</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #0f172a;
+      color: #f1f5f9;
+      margin: 0;
+      padding: 20px;
+    }
+    .container {
+      max-width: 900px;
+      margin: auto;
+      background: #1e293b;
+      padding: 20px;
+      border-radius: 10px;
+    }
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+    input, select, button {
+      padding: 10px 12px;
+      border-radius: 6px;
+      font-size: 14px;
+      border: 1px solid #334155;
+    }
+    input, select {
+      background: #0f172a;
+      color: #fff;
+    }
+    button {
+      border: none;
+      cursor: pointer;
+      color: #fff;
+      font-weight: bold;
+    }
+    .btn-load { background: #2563eb; }
+    .btn-add { background: #7c3aed; }
+    .btn-plus { background: #16a34a; }
+    .btn-minus { background: #dc2626; }
+    .status {
+      margin-bottom: 15px;
+      font-size: 14px;
+      color: #38bdf8;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      margin-bottom: 25px;
+      background: #0f172a;
+    }
+    th, td {
+      padding: 10px;
+      border-bottom: 1px solid #1e293b;
+      text-align: left;
+      font-size: 14px;
+    }
+    th { background: #334155; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>Coin Control Panel</h2>
+
+    <div class="row">
+      <input type="password" id="pinInput" placeholder="Admin PIN" />
+      <button class="btn-load" onclick="loadData()">Connect & Load Data</button>
+    </div>
+
+    <div class="status" id="statusMsg">পিন দিয়ে "Connect & Load Data" চাপুন।</div>
+
+    <h4>1. Add New User ID</h4>
+    <div class="row">
+      <input type="text" id="newUserId" placeholder="New User ID (e.g. user_104)" />
+      <input type="number" id="initialBalance" placeholder="Starting coins (default 0)" min="0" />
+      <button class="btn-add" onclick="addNewUser()">Add User</button>
+    </div>
+
+    <h4>2. Coin Plus / Minus</h4>
+    <div class="row">
+      <input type="text" id="searchUser" placeholder="Search User ID..." oninput="filterUsers()" />
+      <select id="userSelect"></select>
+      <input type="number" id="amountInput" placeholder="Coin amount" min="1" />
+      <button class="btn-plus" onclick="updateBalance('credit')">Coin Plus (+)</button>
+      <button class="btn-minus" onclick="updateBalance('debit')">Coin Minus (-)</button>
+    </div>
+
+    <h3>Users List</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>User ID</th>
+          <th>Current Coins</th>
+        </tr>
+      </thead>
+      <tbody id="usersTableBody"></tbody>
+    </table>
+
+    <h3>Transaction Log</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>User ID</th>
+          <th>Action</th>
+          <th>Amount</th>
+          <th>New Balance</th>
+        </tr>
+      </thead>
+      <tbody id="logsTableBody"></tbody>
+    </table>
+  </div>
+
+  <script>
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwrD7ofg_MhCbCDcK3nAtpNRixEfa8mH5FaxF-agZugEBkCzXxIwr8Q8Q3G3cF9S-OY/exec";
+    let allUsers = [];
+    let allLogs = [];
+
+    function setStatus(text, isError = false) {
+      const el = document.getElementById("statusMsg");
+      el.textContent = text;
+      el.style.color = isError ? "#f87171" : "#38bdf8";
+    }
+
+    async function loadData() {
+      const pin = document.getElementById("pinInput").value.trim();
+      if (!pin) return setStatus("প্রথমে অ্যাডমিন পিন লিখুন।", true);
+
+      setStatus("ডাটা লোড হচ্ছে...");
+      try {
+        const res = await fetch(`${SCRIPT_URL}?action=getData&pin=${encodeURIComponent(pin)}`);
+        const data = await res.json();
+        if (!data.ok) return setStatus(data.message || "লোড ব্যর্থ হয়েছে।", true);
+
+        allUsers = data.users || [];
+        allLogs = data.logs || [];
+        renderUI(allUsers, allLogs);
+        setStatus("সফলভাবে ডাটা লোড হয়েছে।");
+      } catch (err) {
+        setStatus("কানেকশন এরর: " + err.message, true);
+      }
+    }
+
+    async function addNewUser() {
+      const pin = document.getElementById("pinInput").value.trim();
+      const newUserId = document.getElementById("newUserId").value.trim();
+      const balance = Number(document.getElementById("initialBalance").value) || 0;
+
+      if (!pin) return setStatus("প্রথমে অ্যাডমিন পিন লিখুন।", true);
+      if (!newUserId) return setStatus("নতুন User ID লিখুন।", true);
+
+      setStatus("নতুন ইউজার যোগ হচ্ছে...");
+      try {
+        const url = `${SCRIPT_URL}?action=addUser&pin=${encodeURIComponent(pin)}&user_id=${encodeURIComponent(newUserId)}&balance=${encodeURIComponent(balance)}`;
+        const res = await fetch(url);
+        const data = await res.json();
+        if (!data.ok) return setStatus(data.message || "ইউজার যোগ ব্যর্থ হয়েছে।", true);
+
+        document.getElementById("newUserId").value = "";
+        document.getElementById("initialBalance").value = "";
+        setStatus(data.message);
+        await loadData();
+      } catch (err) {
+        setStatus("এরর: " + err.message, true);
+      }
+    }
+
+    function filterUsers() {
+      const keyword = document.getElementById("searchUser").value.trim().toLowerCase();
+      const filtered = allUsers.filter(u => u.id.toLowerCase().includes(keyword));
+      renderUI(filtered, allLogs);
+    }
+
+    function renderUI(users, logs) {
+      const select = document.getElementById("userSelect");
+      const prev = select.value;
+      select.innerHTML = users
+        .map(u => `<option value="${u.id}">${u.id} (Bal: ${u.balance})</option>`)
+        .join("");
+      if (prev && users.some(u => u.id === prev)) select.value = prev;
+
+      document.getElementById("usersTableBody").innerHTML = users
+        .map(u => `<tr><td>${u.id}</td><td>${u.balance}</td></tr>`)
+        .join("");
+
+      document.getElementById("logsTableBody").innerHTML = logs
+        .map(l => `
+          <tr>
+            <td>${l.time}</td>
+            <td>${l.userId}</td>
+            <td>${l.action}</td>
+            <td>${l.amount}</td>
+            <td>${l.newBalance}</td>
+          </tr>
+        `)
+        .join("");
+    }
+
+    async function updateBalance(type) {
+      const pin = document.getElementById("pinInput").value.trim();
+      const userId = document.getElementById("userSelect").value;
+      const amount = Number(document.getElementById("amountInput").value);
+
+      if (!pin) return setStatus("প্রথমে অ্যাডমিন পিন লিখুন।", true);
+      if (!userId || !amount || amount <= 0) return setStatus("সঠিক User ID এবং Amount দিন।", true);
+
+      setStatus("ব্যালেন্স আপডেট হচ্ছে...");
+      try {
+        const url = `${SCRIPT_URL}?action=updateBalance&pin=${encodeURIComponent(pin)}&user_id=${encodeURIComponent(userId)}&type=${encodeURIComponent(type)}&amount=${encodeURIComponent(amount)}`;
+        const res = await fetch(url);
+        const data = await res.json();
+        if (!data.ok) return setStatus(data.message || "আপডেট ব্যর্থ হয়েছে।", true);
+
+        document.getElementById("amountInput").value = "";
+        setStatus(`${userId}-এর ব্যালেন্স আপডেট হয়েছে (নতুন ব্যালেন্স: ${data.newBalance})`);
+        await loadData();
+      } catch (err) {
+        setStatus("আপডেট এরর: " + err.message, true);
+      }
+    }
+  </script>
+</body>
+</html>
